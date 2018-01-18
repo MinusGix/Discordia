@@ -652,22 +652,15 @@ module.exports = Discord => {
 				// TODO: make sure that flatten will return "" if there is nothing.
 				let cmd = Helper.flatten(args.content[1]).toLowerCase();
 				let argument = Helper.flatten(args.content[2]).toLowerCase();
-				// TODO: make sure there's an actual user mentioned, currently built to accommodate multiple users
+
 				let mentions = Helper.parseMentions(args.message.content, args.Client.client, args.guild)
 					.map(user => args.customGuild.getUserByID(user.id));
-				/*let mentions = args.mentions.users.array()
-					.concat(args.mentions.roles.array()
-						.map(role => role.members.array())
-						.reduce((prev, cur) => prev.concat(cur), []))
-					.concat(args.mentions.everyone ? args.guild.members : [])
-					.filter(user => Helper.isUser(user, "discord"))
-					.map(user => args.customGuild.getUserByID(user.id));*/
 
 				let type = this.other.type;
 				let valueName = this.other.valueName;
 
 
-				if (cmd !== "set" && cmd !== ) {
+				if (!Helper.isString(cmd) || cmd === "" || cmd === "get" || cmd === "check" || Helper.parseMentions(cmd, args.Client.client, args.guild).length > 1) {
 					if (mentions.length === 0) {
 						mentions = [args.User];
 					}

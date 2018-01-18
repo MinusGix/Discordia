@@ -19,9 +19,14 @@ function parse(text = '', shouldFlatten = true) {
 
 	let char = _ => {
 		let parentType = getNested(result, currentNest).type;
-		if (current() === '"' || current() === "'" && parentType !== 'quote') {
+		if (current() === '"' || current() === "'" || current() === '(' && parentType !== 'quote') {
 			let quoteMatch = current();
-			pointer++; // get past that quote mark
+			
+			if (quoteMatch === '(') {
+				quoteMatch = ')';
+			} else {
+				pointer++; // get past that quote mark
+			}
 
 			getNested(result, currentNest).children.push({
 				type: 'quote',
@@ -32,6 +37,9 @@ function parse(text = '', shouldFlatten = true) {
 			while (true) {
 
 				if (current() === quoteMatch || pointer >= text.length) {
+					if (quoteMatch === ')') {
+						char();
+					}
 					pointer++;
 					break; // end the while loop
 				}
@@ -40,7 +48,7 @@ function parse(text = '', shouldFlatten = true) {
 			}
 			currentNest.pop();
 			currentNest.pop();
-		} else if (current() === '(' && parentType !== 'quote') {
+		/*} else if (current() === '(' && parentType !== 'quote') {
 			let containerMatch = current();
 
 			if (containerMatch === '(') containerMatch = ')';
@@ -65,7 +73,7 @@ function parse(text = '', shouldFlatten = true) {
 				char();
 			}
 			currentNest.pop();
-			currentNest.pop();
+			currentNest.pop();*/
 		} else {
 			let nest = getNested(result, currentNest);
 			if (current() === ' ') {

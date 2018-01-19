@@ -6,22 +6,25 @@ module.exports = {
 		3 errors
 		4 no logging
 	*/
+	log (text, args) {
+		console.log('[' + text.toUpperCase() + ']:', ...args);
+	},
 	info (...args) {
 		return this.text(...args);
 	},
 	text (...args) {
 		if (1 >= this.level) {
-			console.log('[TEXT]:', ...args);
+			this.log('text', args);
 		}
 	},
 	warn (...args) {
 		if (2 >= this.level) {
-			console.log('[WARNING]:', ...args);
+			this.log('warning', args);
 		}
 	},
 	error (...args) {
 		if (3 >= this.level) {
-			console.log('[ERROR]:', ...args);
+			this.log('error', args);
 		}
 	}
 };

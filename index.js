@@ -1,3 +1,6 @@
+/* Notes
+	Sadly, shouldn't modify Array.prototype to add my own quick method because it adds them in the other files too
+*/
 module.exports = Discord => {
 	let Parser = require('./textparser.js');
 	let Log = require('./log.js');
@@ -132,7 +135,7 @@ module.exports = Discord => {
 			}
 
 			if (!Helper.isUser(user, "discord")) {
-				return null; // TODO: do more than just ignore it
+				return null;
 			}
 
 			return user || null;
@@ -158,7 +161,7 @@ module.exports = Discord => {
 				}
 			} // otherwise ignore it
 
-			return flat;
+			return flat || "";
 		},
 		not(bool) {
 			return !!bool;
@@ -180,6 +183,16 @@ module.exports = Discord => {
 		precedence(...args) { // returns first value that isn't undefined or null
 			return Helper.breakFirst(args, arg => arg !== undefined && arg !== null);
 		},
+		divide (arr, func, destTrue=[], destFalse=[]) { // essentially filter, but false ones get dumped into a separate array
+			arr.forEach((value, index, array) => {
+				if (func(value, index, array)) {
+					destTrue.push(value);
+				} else {
+					destFalse.push(value);
+				}
+			})
+			return [destFalse, destTrue];
+		},
 		hasProperty(val, propName, strict = true) {
 			if (Helper.isObject(val)) {
 				if (strict === true) {
@@ -190,10 +203,8 @@ module.exports = Discord => {
 			}
 			return !!val[propName]; // TODO: Do a better check
 		},
-		getProperty(val, propName, ...precedence) {
-			// TODO: make this
-		},
 		getTypeFunction(type = 'string') {
+			// todo: make a quick way of doing this, wrapper function perhaps?
 			if (type === 'string') {
 				return Helper.isString;
 			} else if (type === 'boolean' || type === 'bool') {
@@ -223,15 +234,18 @@ module.exports = Discord => {
 			} else if (type === 'regex') {
 				return Helper.isRegex;
 			}
-			return () => false; // TODO: do more than just this
+			Log.warn(`getTypeFunction function ran with invalid type of: '${type}'`);
+			return () => false;
 		},
 		is(val, type = 'or', ...types) {
 			if (type === 'or') {
 				return Helper.isOR(val, ...types);
 			} else if (type === 'and') {
 				//return Helper.isAND(val, types); // TODO: implement this
+			} else {
+				Log.warn(`is function ran with invalid type of: '${type}'`);
+				return false;
 			}
-			// TODO: don't do nothing if the type doesn't exist
 		},
 		isOR(val, ...types) {
 			return types.map(type => Helper.getTypeFunction(type)(val)) // turns it into an array of bools
@@ -267,8 +281,10 @@ module.exports = Discord => {
 				return user instanceof Discord.User || user instanceof Discord.GuildMember;
 			} else if (type === "custom") {
 				return user instanceof User;
+			} else {
+				Log.warn(`isUser function ran with invalid type of: '${type}'`);
+				return false;
 			}
-			// TODO: do more than just nothing.
 		},
 		isChannel(channel) {
 			return channel instanceof Discord.Channel;
@@ -281,8 +297,10 @@ module.exports = Discord => {
 				return guild instanceof Discord.Guild;
 			} else if (type === "custom") {
 				return guild instanceof Guild;
+			} else {
+				Log.warn(`isGuild function ran with invalid type of: '${type}'`);
+				return false;
 			}
-			// TODO: DO something rather than nothing
 		},
 		isMember(member) {
 			return member instanceof Discord.GuildMember;
@@ -298,8 +316,10 @@ module.exports = Discord => {
 				return client instanceof Discord.Client;
 			} else if (type === "custom") {
 				return client instanceof Client;
+			} else {
+				Log.warn(`isClient function ran with invalid type of: '${type}'`);
+				return false;
 			}
-			// TODO: Do something rather than nothing
 		},
 		isRegex(regex) {
 			return regex instanceof RegExp;
@@ -322,17 +342,6 @@ module.exports = Discord => {
 			}
 			return result;
 		},
-		// #region replace functions
-		replace(text, replace, replaceWith) { // TODO: remove this or revamp it, as it's currently (almost) useless
-			if (Helper.isString(text) && (Helper.isString(replaceWith) || Helper.isFunction(replaceWith))) {
-				if (Helper.isRegex(replace)) {
-					return text.replace(replace, replaceWith);
-				} else if (Helper.isString(replace)) { // TODO: Make this work
-
-				}
-			}
-			return text;
-		},
 		replaceKeyWords(text, args, customCommandName = '') { // TODO: split this out so it can be done without args
 			if (Helper.isString(text) && Helper.isObject(args)) {
 				return text.replace(/\$prefix/gi, args.prefix)
@@ -340,7 +349,6 @@ module.exports = Discord => {
 			}
 			return text; // return it if it didn't work TODO: make this error thing better
 		}
-		// #endregion replace functions
 		// #endregion functions
 	};
 
@@ -523,9 +531,6 @@ module.exports = Discord => {
 			if (!Helper.isObject(other)) {
 				other = {};
 			}
-			if (!Helper.isFunction(other.isValid)) {
-				other.isValid = (value, args) => true; // TODO: implement this
-			}
 			if (!Helper.isFunction(other.onModifiedValue)) {
 				other.onModifiedValue = (value, args) => args.reply("Value was set too: " + value);
 			}
@@ -631,11 +636,17 @@ module.exports = Discord => {
 			string.length>=5#lowercase means the length must be greater than or equal to 5, then it will be lowercased
 		*/
 		addStatCommand(name, valueName, type = "string", other = {}) {
+			if (!Helper.isArray(name)) {
+				name = [name];
+			}
+
+			if (!Helper.isString(valueName)) {
+				Log.warn(`valueName in the ${name[0]} command is not a string.`);
+			}
+
+			// #region other
 			if (!Helper.isObject(other)) {
 				other = {};
-			}
-			if (!Helper.isFunction(other.isValid)) {
-				other.isValid = (value, users, args) => true; // TODO: implement this
 			}
 			if (!Helper.isFunction(other.onModifiedValue)) {
 				other.onModifiedValue = (value, users, args) => null;
@@ -649,7 +660,8 @@ module.exports = Discord => {
 					} else if (error === "no mentions") {
 						args.reply("No users were mentioned.");
 					} else {
-						args.reply("Unknown Error."); // TODO: Do some sort of error logging
+						Log.warn(`Stat command with the valueName: '${valueName}' gave an unknown error of: '${error}'`);
+						args.reply("Unknown Error.");
 					}
 				};
 			}
@@ -671,17 +683,37 @@ module.exports = Discord => {
 				Helper.displayNonMembers = false; // whether or not to display users who've left
 			}
 
-			// TODO: Add an autogenerated help description and usage data, if it doesn't exist
-			// TODO: make so you don't have to ping them
-			// TODO: do something like: k!gold set 50 (user:MinusGix#7319) (user:MinusGixAlt#4607) (role:Marxist) (role:everyone)
+			// Help/Description
+			if (!Helper.isFunction(other.description) && !Helper.isString(other.description)) {
+				other.description = 'Stores a stat for each user in the form of a ' + type + '.';
+			}
+
+			if (!Helper.isFunction(other.usage) && !Helper.isString(other.usage)) {
+				let pre = '`$prefix$commandName'
+				other.usage = pre + "` - Acquires the value stored.\n";
+				other.usage += pre + " [mention]+` - Gets mentioned user's values.\n";
+				other.usage += pre + " set [value] [mention]+` - Sets value of each mentioned user.\n";
+				
+				if (type === 'number') {
+					other.usage += pre + " add [value] [mention]+` - Adds value to each mentioned user. (user+value)\n";
+					other.usage += pre + " sub [value] [mention]+` - Subtracts value from each mentioned user. (user-value)\n";
+					other.usage += pre + " multiply [value] [mention]+` - Multiply each mentioned user by value. (user*value)\n";
+					other.usage += pre + " divideby [value] [mention]+` - Divides each mentioned user by value. (user/value)\n";
+					other.usage += pre + " divide [value] [mention]+` - Divides value by each mentioned user, and sets it. (value/user).\n";
+					
+					if (other.leaderboard.allowed) {
+						other.usage += pre + " leaderboard` - Generates a top " + other.leaderboard.entries + " leaderboard.";
+					}
+				}
+			}
 
 			other = Object.assign({ // merge the objects
 				valueName,
 				type
 			}, other);
+			// #endregion other
 
 			let run = function (args) {
-				// TODO: make sure that flatten will return "" if there is nothing.
 				let cmd = Helper.flatten(args.content[1]).toLowerCase();
 				let argument = Helper.flatten(args.content[2]).toLowerCase();
 
@@ -852,7 +884,7 @@ module.exports = Discord => {
 				storage: {},
 				Users: {}
 			};
-			// TODO: Once you implement custom commands, make sure to save them
+			// REMINDER: Once you implement custom commands, make sure to save them
 			guild.id = this.id; // not exactly needed
 			guild.settings = this.settings || {}; // just directly copy it // TODO: do something better than this
 			guild.storage = this.storage.getData();
@@ -897,7 +929,6 @@ module.exports = Discord => {
 		// #endregion user
 	}
 
-
 	class Client {
 		constructor(token = null) {
 			this.client = new Discord.Client();
@@ -921,14 +952,19 @@ module.exports = Discord => {
 						args.reply('Sorry, but that command was not found.');
 					}
 				} else {
-					let commands = args.Client.Commands.list.concat(args.customGuild.Commands.list);
 					let prefix = args.prefix;
+					let commands = Helper.divide(
+						args.Client.Commands.list.concat(args.customGuild.Commands.list),
+						(command) => Helper.isCommand(command))
+					
+					if (commands[0].length > 0) { // if there's non-commands
+						Log.warn(`There was ${commands[0].length} items inside the command list for the Client and/or the guild with the id: '${args.customGuild.id}'\nthat are not valid commands.`);
+					}
 
-					let commandsText = '**Commands**:\n' + commands // TODO: Do more than just ignore non commands in the command list
-						.filter(command => Helper.isCommand(command) && command.isAllowed(args)) // filters out non-commands and commands you aren't allowed to use
-						.map(command => prefix + command.name[0]) // gets the first command name and adds the prefix to the start
-						.join(', ') + '.';
-					args.reply(commandsText);
+					args.reply('**Commands**:\n' + commands[1]
+						.filter(command => command.isAllowed(args))
+						.map(command => prefix + command.name[0])
+						.join(', ') + '.');
 				}
 			}, {
 				allowed: true,
@@ -942,14 +978,15 @@ module.exports = Discord => {
 				let {
 					member,
 					content,
-					guild
+					guild,
+					channel
 				} = message;
 
 				// messages from self will show up as "ignoring message"
 				if (!(
 						Helper.isMessage(message) && // makes sure this is a message
-						Helper.isChannel(message.channel) && // makes sure this is a channel
-						Helper.isTextChannel(message.channel) && // make sure this is a textchannel, not a DM/Voice/etc
+						Helper.isChannel(channel) && // makes sure this is a channel
+						Helper.isTextChannel(channel) && // make sure this is a textchannel, not a DM/Voice/etc
 						Helper.isGuild(guild, 'discord') && // make sure this is an actual guild, just in case
 						guild.available === true && // make sure the guild isn't having an outage
 						Helper.isString(content) && // make sure there's actual text
@@ -960,10 +997,11 @@ module.exports = Discord => {
 				}
 
 
-				let customGuild = this.getGuild(message.guild);
+				let customGuild = this.getGuild(guild);
 
-				if (!Helper.isGuild(customGuild, "custom")) { // make sure this is an actual guild, getGuild should make it automatically, but just in case
-					return Log.info('ignoring customguild'); // TODO: do more than just ignore a possibly broken guild
+				if (!Helper.isGuild(customGuild, "custom")) {
+					// shouldn't send anything in a chat that there is an error, since it might not be a command
+					return Log.warn("There was a problem with getting a custom guild from a guild. :(");
 				}
 
 				let prefix = Helper.getPrefix(this, customGuild);
@@ -978,7 +1016,7 @@ module.exports = Discord => {
 				content = Parser.parse(content, true); // parses it in to an array, useful
 
 				if (!Helper.isString(content[0])) { // make sure the first is a string
-					return; // TODO: DO more than ignore this, as it means the parser is messing up some & should be fixed
+					return Log.warn(`Possible issue with Parser, as content[0] is not a string. It's value is: '${content[0]}'`);
 				}
 
 				let commandName = content[0].substring(prefix.length).toLowerCase(); //gets the text after the prefix & make it lowercase
@@ -987,8 +1025,12 @@ module.exports = Discord => {
 				// DEBUG information
 				console.table('content', content, 'prefix', prefix, 'commandName', commandName, 'command', command);
 
-				if (!Helper.isCommand(command)) {
-					return; // TODO: Tell them it's not a command, but also make this per-guild (Default: Tell them)
+				if (!Helper.isCommand(command)) { // should work
+					let allowedToTell = Helper.precedence(customGuild.settings.canTellNonCommand, "Sorry, but that is not a command.");
+
+					if (allowedToTell === false) return;
+
+					return message.reply(allowedToTell);
 				}
 
 				let User = customGuild.getUser(message.member);
@@ -1025,7 +1067,7 @@ module.exports = Discord => {
 					guildRoles: guild.roles, // <Collection{<ID>:<Discord.Role>}>
 					guildBan: guild.ban.bind(guild), // bans a user from the guild (needs-perms)
 
-					channel: message.channel, // <Discord.Channel> The channel the message was sent in
+					channel, // <Discord.Channel> The channel the message was sent in
 					channelID: message.channel.id, // <ID> The ID of the channel the message was sent in
 
 					content, // <[String+|Self*]>

@@ -1,5 +1,6 @@
 module.exports = Discord => {
 	let Parser = require('./textparser.js');
+	let Log = require('./log.js');
 
 	console.table = function (...args) {
 		console.log('=====================================================================');
@@ -8,6 +9,8 @@ module.exports = Discord => {
 		}
 		console.log('=====================================================================');
 	}
+
+	
 
 	let Helper = {
 		var: { // helpful variables
@@ -41,30 +44,30 @@ module.exports = Discord => {
 		},
 		// #region functions
 		parseMentions(text, client, guild) {
-			// TODO: add more existence checking
-
 			let users = Helper.match(text, Helper.var.regex.user)
 				.map(userMention => client.users.get(
 					userMention.substring(userMention[2] === '!' ? 3 : 2, userMention.length - 1)
 				))
 
 				.concat(Helper.match(text, Helper.var.regex.userParen)
-					.map(userTag => userTag.substring(6, userTag.length - 1).trim())
+					.map(userTag => userTag.substring(6, userTag.length - 1).trim().toLowerCase())
 					.map(userTag => client.users.find(
-						user => user.tag.toLowerCase() === userTag.toLowerCase()
+						user => user && user.tag && user.tag.toLowerCase() === userTag
 					)))
 				
+					
 				.concat(Helper.match(text, Helper.var.regex.role)
 					.map(roleMention => guild.roles.get(roleMention.substring(3, roleMention.length - 1)))
 					.concat(Helper.match(text, Helper.var.regex.roleParen)
 						.map(roleName => { // 1 map is logically more efficient, though multiple can be easier to quickly read
-							roleName = roleName.substring(6, roleName.length - 1).trim()
+							roleName = roleName.substring(6, roleName.length - 1).trim().toLowerCase();
 							if (roleName === 'everyone') {
 								roleName = '@everyone';
 							}
-							return guild.roles.find(role => role.name.toLowerCase() === roleName.toLowerCase())
+							return guild.roles.find(role => role.name.toLowerCase() === roleName)
 						})
 					)
+
 					.filter(role => Helper.isRole(role))
 					.reduce((prev, cur) => prev.concat(cur.members.array()), []));
 
@@ -933,7 +936,7 @@ module.exports = Discord => {
 				usage: "`$prefix$commandname` acquires the list of commands\n`$prefix$commandname [command]` gets the help information for [command]`"
 			});
 
-			this.client.on('ready', _ => console.log('Logged in'));
+			this.client.on('ready', _ => Log.info('Logged in'));
 
 			this.client.on('message', message => {
 				let {
@@ -953,14 +956,14 @@ module.exports = Discord => {
 						Helper.isMember(member) && // make sure it's an actual member; leaving guild won't break it (hopefully)
 						member.id !== this.client.user.id // ignore itself
 					)) {
-					return console.log('ignoring message');
+					return Log.info('ignoring message');
 				}
 
 
 				let customGuild = this.getGuild(message.guild);
 
 				if (!Helper.isGuild(customGuild, "custom")) { // make sure this is an actual guild, getGuild should make it automatically, but just in case
-					return console.log('ignoring customguild'); // TODO: do more than just ignore a possibly broken guild
+					return Log.info('ignoring customguild'); // TODO: do more than just ignore a possibly broken guild
 				}
 
 				let prefix = Helper.getPrefix(this, customGuild);
@@ -969,7 +972,7 @@ module.exports = Discord => {
 						Helper.isString(prefix) && // make sure the prefix exists
 						content.startsWith(prefix) // make sure the text starts with the prefix, otherwise it isn't a command
 					)) {
-					return console.log('ignoring non-command');
+					return Log.info('ignoring non-command');
 				}
 
 				content = Parser.parse(content, true); // parses it in to an array, useful

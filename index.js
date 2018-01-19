@@ -23,54 +23,57 @@ module.exports = Discord => {
 				wrong: "wrong argument",
 				noCommand: "wrong command",
 				noUsers: "no mentions"
+			},
+			regex: {
+				everyone: Discord.MessageMentions.EVERYONE_PATTERN,
+				role: Discord.MessageMentions.ROLES_PATTERN,
+				user: Discord.MessageMentions.USERS_PATTERN,
+
+				userParen: /\((user(:|=| ).*?#\d+)\)/gi,
+				roleParen: /\((role(:|=| ).*?)\)/gi,
+
 			}
 		},
 		parseMentions(text, client, guild) {
-			// /\((user:.*?#\d+)\)/gi - matches (user: MinusGix#7319)
-
-			let matchUserParen = /\((user(:|=| ).*?#\d+)\)/gi;
-			let matchRoleParen = /\((role(:|=| ).*?)\)/gi;
-			let MessageMentions = Discord.MessageMentions;
-
-			let everyoneMatch = Helper.match(text, MessageMentions.EVERYONE_PATTERN);
+			let everyoneMatch = Helper.match(text, Helper.var.regex.everyone);
 
 			// TODO: add more existence checking
 
-			let roleMatch = Helper.match(text, MessageMentions.ROLES_PATTERN)
-				.map(roleMention => roleMention.substring(3, roleMention.length - 1))
-				.map(roleID => guild.roles.get(roleID));
-			let roleMatchParen = Helper.match(text, matchRoleParen)
-				.map(roleName => { // 1 map is logically more efficient, though multiple can be easier to quickly read
-					roleName = roleName.substring(6, roleName.length - 1).trim()
-					if (roleName === 'everyone') {
-						roleName = '@everyone';
-					}
-					return guild.roles.find(role => role.name.toLowerCase() === roleName.toLowerCase())
-				}); // 'everyone' gets tossed in here
+			let users = Helper.match(text, Helper.var.regex.user)
+				.map (userMention => client.users.get(
+					userMention.substring(userMention[2] === '!' ? 3 : 2, userMention.length - 1)
+				))
 
-			let rolesUsers = roleMatch.concat(roleMatchParen)
-				.map(role => role.members.array())
-				.reduce((prev, cur) => prev.concat(cur), [])
-				.map(member => member.user);
-
-			let userMatch = Helper.match(text, MessageMentions.USERS_PATTERN)
-				.map(user => user.substring(user[2] === '!' ? 3 : 2, user.length - 1))
-				.map(userID => client.users.get(userID));
-			let userMatchParen = Helper.match(text, matchUserParen)
-				.map(user => user.substring(6, user.length - 1).trim())
-				.map(user => client.users.find('tag', user));
-
-			let users = userMatch.concat(userMatchParen)
-				.concat(rolesUsers);
+				.concat(Helper.match(text, Helper.var.regex.userParen)
+					.map(userTag => userTag.substring(6, userTag.length - 1).trim())
+					.map(userTag => client.users.find(
+						user => user.tag.toLowerCase() === userTag.toLowerCase()
+					)))
+				
+				.concat(Helper.match(text, Helper.var.regex.role)
+					.map(roleMention => guild.roles.get(roleMention.substring(3, roleMention.length - 1)))
+					.concat(Helper.match(text, Helper.var.regex.roleParen)
+						.map(roleName => { // 1 map is logically more efficient, though multiple can be easier to quickly read
+							roleName = roleName.substring(6, roleName.length - 1).trim()
+							if (roleName === 'everyone') {
+								roleName = '@everyone';
+							}
+							return guild.roles.find(role => role.name.toLowerCase() === roleName.toLowerCase())
+						})
+					)
+					.filter(role => Helper.isRole(role))
+					.reduce((prev, cur) => prev.concat(cur.members.array()), []));
 
 			if (everyoneMatch.length > 0) {
-				let everyone = guild.members.map(member => member.user);
+				let everyone = guild.members.array();
 				for (let i = 0; i < everyoneMatch.length; i++) {
 					users.concat(everyone);
 				}
 			}
 
-			return users.filter(user => Helper.isUser(user, "discord"));
+			return users
+				.filter(user => Helper.isUser(user, "discord"))
+				.map(member => member.user || member);
 		},
 
 		capitalize(string, everyWord = false) {
@@ -227,6 +230,9 @@ module.exports = Discord => {
 				.reduce((prev, cur) => prev || cur); // shrinks them all into one value
 		},
 		// #region isType
+		isRole (role) {
+			return role instanceof Discord.Role;
+		},
 		isNumber(num, strict = true) {
 			return typeof (num) === 'number' && (strict === true ? (!Number.isNaN(num) && num !== Infinity && num !== -Infinity) : true);
 		},
@@ -658,9 +664,10 @@ module.exports = Discord => {
 
 				let type = this.other.type;
 				let valueName = this.other.valueName;
-
-
-				if (!Helper.isString(cmd) || cmd === "" || cmd === "get" || cmd === "check" || Helper.parseMentions(cmd, args.Client.client, args.guild).length > 1) {
+				console.log(cmd);
+				let cmdMentions = Helper.parseMentions(cmd, args.Client.client, args.guild);
+				console.log(cmdMentions);
+				if (!Helper.isString(cmd) || cmd === "" || cmd === "get" || cmd === "check" || cmdMentions.length > 0) {
 					if (mentions.length === 0) {
 						mentions = [args.User];
 					}

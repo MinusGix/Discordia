@@ -362,7 +362,7 @@ module.exports = Discord => {
 		static fromData(data, initValue) {
 			let storage = new Storage(initValue);
 
-			if (Helper.isObject(data) && data.isValid === true) {
+			if (Helper.isObject(data)) {
 				storage.store = data.store;
 			}
 
@@ -414,9 +414,9 @@ module.exports = Discord => {
 		static fromData(data, id) {
 			let user = new User(id);
 
-			if (Helper.isObject(data) && Helper.isValid === true) {
+			if (Helper.isObject(data)) {
 				user.permissions = data.permissions;
-				user.storage = Storage.fromData(data.storage);
+				user.storage = Storage.fromData(data.storage, 0);
 			}
 
 			return user;
@@ -854,7 +854,7 @@ module.exports = Discord => {
 		constructor(id = null) {
 			this.id = id;
 			this.settings = {};
-			this.storage = new Storage({});
+			this.storage = new Storage(0);
 
 			this.Users = {};
 
@@ -866,7 +866,7 @@ module.exports = Discord => {
 
 			if (Helper.isObject(data) && data.isValid === true) {
 				guild.settings = data.settings;
-				guild.storage = Storage.fromData(data.storage);
+				guild.storage = Storage.fromData(data.storage, 0);
 
 				for (let i in data.Users) {
 					guild.Users[i] = User.fromData(data.Users[i], data.Users[i].id);
@@ -1096,7 +1096,7 @@ module.exports = Discord => {
 		static fromData(data, token) {
 			let client = new Client(token);
 
-			if (Helper.isObject(data) && data.isValid === true) {
+			if (Helper.isObject(data) && data.isValid === true) { // data.isValid is to make sure that it's not just an empty object
 				client.prefix = data.prefix;
 
 				for (let i in data.Guilds) {
@@ -1183,6 +1183,7 @@ module.exports = Discord => {
 		Command,
 		CommandList,
 		Storage,
-		Helper
+		Helper,
+		Log
 	};
 }

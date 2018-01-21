@@ -14,7 +14,7 @@ module.exports = {
 	},
 	text (...args) {
 		if (1 >= this.level) {
-			this.log('text', args);
+			this.log('info', args);
 		}
 	},
 	warn (...args) {

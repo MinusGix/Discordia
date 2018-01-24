@@ -47,7 +47,7 @@ module.exports = Discord => {
 			}
 		},
 		// #region functions
-		send (send, preface="") { // makes a send function that replaces everything that shouldn't be repeated
+		send(send, preface = "") { // makes a send function that replaces everything that shouldn't be repeated
 			return async msg => {
 				let values = (preface + msg.replace(Helper.var.regex.at, ' @ ')).match(/[^]{1,1800}/g);
 				for (let i = 0; i < values.length; i++) { // Promises are the root of all evil, await/async is rather useful <3
@@ -55,19 +55,19 @@ module.exports = Discord => {
 				}
 			}
 		},
-		reply (reply, user) {
+		reply(reply, user) {
 			return Helper.send(reply, user.toString() + ", ");
 		},
-		randomArray (arr) {
+		randomArray(arr) {
 			return arr[Helper.randomArrayIndex(arr)];
 		},
-		randomArrayIndex (arr) {
-			return Helper.randomInteger(arr.length-1, 0);
+		randomArrayIndex(arr) {
+			return Helper.randomInteger(arr.length - 1, 0);
 		},
-		randomInteger (max=20, min=1) { // 1-20, including 1 and 20
+		randomInteger(max = 20, min = 1) { // 1-20, including 1 and 20
 			return Math.floor(Math.random() * (max - min + 1)) + min;
 		},
-		hasRole (member, role) {
+		hasRole(member, role) {
 			if (Helper.isNumber(Helper.Number(role))) { // because ID's are strings
 				return Helper.hasRoleByID(member, role);
 			} else if (Helper.isString(role)) { // name
@@ -78,10 +78,10 @@ module.exports = Discord => {
 			Log.warn("hasRole function ran with a non-known type of role. It's value was:", role);
 			return false;
 		},
-		hasRoleByID (member, roleID) {
+		hasRoleByID(member, roleID) {
 			return member.roles.has(roleID);
 		},
-		hasRoleByName (member, roleName) {
+		hasRoleByName(member, roleName) {
 			roleName = roleName.toLowerCase();
 			return Helper.isRole(member.roles.find(role => role.name.toLowerCase() === roleName));
 		},
@@ -96,8 +96,8 @@ module.exports = Discord => {
 					.map(userTag => client.users.find(
 						user => user && user.tag && user.tag.toLowerCase() === userTag
 					)))
-				
-					
+
+
 				.concat(Helper.match(text, Helper.var.regex.role)
 					.map(roleMention => guild.roles.get(roleMention.substring(3, roleMention.length - 1)))
 					.concat(Helper.match(text, Helper.var.regex.roleParen)
@@ -224,7 +224,7 @@ module.exports = Discord => {
 		precedence(...args) { // returns first value that isn't undefined or null
 			return Helper.breakFirst(args, arg => arg !== undefined && arg !== null);
 		},
-		divide (arr, func, destTrue=[], destFalse=[]) { // essentially filter, but false ones get dumped into a separate array
+		divide(arr, func, destTrue = [], destFalse = []) { // essentially filter, but false ones get dumped into a separate array
 			arr.forEach((value, index, array) => {
 				if (func(value, index, array)) {
 					destTrue.push(value);
@@ -293,7 +293,7 @@ module.exports = Discord => {
 				.reduce((prev, cur) => prev || cur); // shrinks them all into one value
 		},
 		// #region isType
-		isRole (role) {
+		isRole(role) {
 			return role instanceof Discord.Role;
 		},
 		isNumber(num, strict = true) {
@@ -302,7 +302,7 @@ module.exports = Discord => {
 		isString(str) {
 			return typeof (str) === 'string'; // don't use instanceof, because that doesn't work with normal strings
 		},
-		isBoolean(bool, strict=true) {
+		isBoolean(bool, strict = true) {
 			if (strict === false && (bool === 'true' || bool === 'false')) {
 				return true;
 			}
@@ -412,15 +412,15 @@ module.exports = Discord => {
 			return storage;
 		}
 
-		increase (key, amount=0, def) {
+		increase(key, amount = 0, def) {
 			let value = this.get(key, def);
 			if (Helper.isNumber(value)) {
-				return this.set(key, value+amount);
+				return this.set(key, value + amount);
 			}
 			return false;
 		}
 
-		decrease (key, amount=0) {
+		decrease(key, amount = 0) {
 			return this.increase(key, -amount);
 		}
 
@@ -436,7 +436,7 @@ module.exports = Discord => {
 				if (strict === true && this.store.hasOwnProperty(key)) {
 					return false;
 				}
-				
+
 				if (val === undefined) val = this.initValue;
 
 				return this.set(key, val);
@@ -495,7 +495,7 @@ module.exports = Discord => {
 			}
 			// Divides (filters) it into two arrays of [False, True]
 			this.name = Helper.divide(name, commandName => Helper.isString(commandName));
-			
+
 			if (this.name[0].length !== 0) {
 				Log.warn("A command being made with the names:", name, "\nHad the following non-commands (non-strings):", this.name[0]);
 			}
@@ -604,10 +604,10 @@ module.exports = Discord => {
 			if (!Helper.isFunction(other.usage) && !Helper.isString(other.usage)) {
 				other.usage = args => {
 					let pre = "`$prefix$commandName";
-					
+
 					let text = pre + "` - Acquires the stored value.\n";
 					text += pre + " set [value]` - Sets valuer.\n";
-				
+
 					if (type === 'number') {
 						text += pre + " add [value]` - Adds value to the oldValue. (oldValue+value)\n";
 						text += pre + " sub [value]` - Subtracts value from the oldValue. (oldValue-value)\n";
@@ -615,7 +615,7 @@ module.exports = Discord => {
 						text += pre + " divideby [value]` - Divides the oldValue by value. (oldValue/value)\n";
 						text += pre + " divide [value]` - Divides value by oldValue. (value/oldValue).";
 					}
-					
+
 					return text;
 				}
 			}
@@ -756,7 +756,7 @@ module.exports = Discord => {
 					}
 					return Helper.getUser(user, args.guild, args.Client).displayName + ' : ' + user.storage.get(valueName, val);
 				}).join('\n'));
-					
+
 			}
 
 			if (!Helper.isBoolean(other.noMentionsAffectsUser)) {
@@ -777,7 +777,9 @@ module.exports = Discord => {
 				other.leaderboard.displayNonMembers = false; // whether or not to display users who've left
 			}
 			if (!Helper.isFunction(other.leaderboard.onLeaderboard)) {
-				other.leaderboard.onLeaderboard = (results, {send}) => send(results 
+				other.leaderboard.onLeaderboard = (results, {
+					send
+				}) => send(results
 					.reduce((prev, cur) => `${prev}\n*${cur[0].displayName || cur[0].username}* : ${cur[1]}`, '**Leaderboard:**'));
 			}
 
@@ -789,19 +791,19 @@ module.exports = Discord => {
 			if (!Helper.isFunction(other.usage) && !Helper.isString(other.usage)) {
 				other.usage = args => {
 					let pre = "`$prefix$commandName";
-					 // TODO: make this better
+					// TODO: make this better
 					let text = pre + "` - Acquires the value stored.\n";
 					text += pre + " [mention]+` - Gets mentioned user's values.\n";
 					text += pre + " set [value]` - Sets the value of yourself (if that's enabled).\n"
 					text += pre + " set [value] [mention]+` - Sets value of each mentioned user.\n";
-				
+
 					if (type === 'number') {
 						text += pre + " add [value] [mention]+` - Adds value to each mentioned user. (user+value)\n";
 						text += pre + " sub [value] [mention]+` - Subtracts value from each mentioned user. (user-value)\n";
 						text += pre + " multiply [value] [mention]+` - Multiply each mentioned user by value. (user*value)\n";
 						text += pre + " divideby [value] [mention]+` - Divides each mentioned user by value. (user/value)\n";
 						text += pre + " divide [value] [mention]+` - Divides value by each mentioned user, and sets it. (value/user).\n";
-					
+
 						if (Helper.run(other.leaderboard.allowed, args)) {
 							text += pre + " leaderboard` - Generates a top " + other.leaderboard.entries + " leaderboard.";
 						}
@@ -825,13 +827,13 @@ module.exports = Discord => {
 
 				let type = this.other.type;
 				let valueName = this.other.valueName;
-				
+
 				if (mentions.length === 0 && this.other.noMentionsAffectsUser === true) {
 					mentions = [args.customUser];
 				}
-				
+
 				let cmdMentions = Helper.parseMentions(cmd, args.Client.client, args.guild);
-				
+
 				if (!Helper.isString(cmd) || cmd === "" || cmd === "get" || cmd === "check" || cmdMentions.length > 0) {
 					return this.other.onValueRetrieved(mentions, args);
 				}
@@ -885,7 +887,7 @@ module.exports = Discord => {
 							.filter(infoUser => Helper.isUser(infoUser[0], "discord")) // filter out null users
 							.filter(infoUser => this.other.leaderboard.displayNonMembers || Helper.isMember(infoUser[0]))
 							.slice(0, this.other.leaderboard.entries); // limit it
-													
+
 						results.sort((numA, numB) => numB[1] - numA[1]); // sort it greatest to least
 						return this.other.leaderboard.onLeaderboard(results, args);
 					} else {
@@ -1065,7 +1067,7 @@ module.exports = Discord => {
 					let commands = Helper.divide(
 						args.Client.Commands.list.concat(args.customGuild.Commands.list),
 						(command) => Helper.isCommand(command))
-					
+
 					if (commands[0].length > 0) { // if there's non-commands
 						Log.warn(`There was ${commands[0].length} items inside the command list for the Client and/or the guild with the id: '${args.customGuild.id}'\nthat are not valid commands.`);
 					}
@@ -1157,7 +1159,7 @@ module.exports = Discord => {
 
 					message, // <Message> the message
 					get prefix() { // so even if it updates while it's doing something it will update here. Is this even useful?
-						return Helper.getPrefix(this, customGuild); 
+						return Helper.getPrefix(this, customGuild);
 					},
 
 					mentions: message.mentions, // <Collection> of mentions

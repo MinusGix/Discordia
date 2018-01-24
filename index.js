@@ -47,11 +47,16 @@ module.exports = Discord => {
 			}
 		},
 		// #region functions
-		send (send) { // makes a send function that replaces everything that shouldn't be repeated
-			return (text) => send(text.replace(Helper.var.regex.at, ' @ '));
+		send (send, preface="") { // makes a send function that replaces everything that shouldn't be repeated
+			return async msg => {
+				let values = (preface + msg.replace(Helper.var.regex.at, ' @ ')).match(/[^]{1,1800}/g);
+				for (let i = 0; i < values.length; i++) { // Promises are the root of all evil, await/async is rather useful <3
+					await send(values[i]);
+				}
+			}
 		},
-		reply (reply) {
-			return (text) => reply(text.replace(Helper.var.regex.at, ' @ '));
+		reply (reply, user) {
+			return Helper.send(reply, user.toString() + ", ");
 		},
 		randomArray (arr) {
 			return arr[Helper.randomArrayIndex(arr)];
@@ -597,17 +602,21 @@ module.exports = Discord => {
 			}
 
 			if (!Helper.isFunction(other.usage) && !Helper.isString(other.usage)) {
-				// TODO: make it a function and only shows what they can do
-				let pre = '`$prefix$commandName'
-				other.usage = pre + "` - Acquires the stored value.\n";
-				other.usage += pre + " set [value]` - Sets valuer.\n";
+				other.usage = args => {
+					let pre = "`$prefix$commandName";
+					
+					let text = pre + "` - Acquires the stored value.\n";
+					text += pre + " set [value]` - Sets valuer.\n";
 				
-				if (type === 'number') {
-					other.usage += pre + " add [value]` - Adds value to the oldValue. (oldValue+value)\n";
-					other.usage += pre + " sub [value]` - Subtracts value from the oldValue. (oldValue-value)\n";
-					other.usage += pre + " multiply [value]` - Multiply the oldValue by value. (oldValue*value)\n";
-					other.usage += pre + " divideby [value]` - Divides the oldValue by value. (oldValue/value)\n";
-					other.usage += pre + " divide [value]` - Divides value by oldValue. (value/oldValue).";
+					if (type === 'number') {
+						text += pre + " add [value]` - Adds value to the oldValue. (oldValue+value)\n";
+						text += pre + " sub [value]` - Subtracts value from the oldValue. (oldValue-value)\n";
+						text += pre + " multiply [value]` - Multiply the oldValue by value. (oldValue*value)\n";
+						text += pre + " divideby [value]` - Divides the oldValue by value. (oldValue/value)\n";
+						text += pre + " divide [value]` - Divides value by oldValue. (value/oldValue).";
+					}
+					
+					return text;
 				}
 			}
 
@@ -1184,7 +1193,7 @@ module.exports = Discord => {
 					isAvailable() {
 						return guild.available;
 					},
-					reply: Helper.reply(message.reply.bind(message)), // replies with an @ to the member at the start (needs-perms)
+					reply: Helper.reply(message.channel.send.bind(message.channel), member), // replies with an @ to the member at the start (needs-perms)
 					send: Helper.send(message.channel.send.bind(message.channel)), // sends a message to the same channel (needs-perms)
 					clearReactions: message.clearReactions.bind(message), // clears all the reactions (needs-perms)
 					createReactionCollector: message.createReactionCollector.bind(message), // collects any reactions that are added

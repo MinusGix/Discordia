@@ -3,6 +3,7 @@
 */
 module.exports = Discord => {
 	let Parser = require('./textparser.js');
+	let EventEmitter = require('events');
 	let Log = require('./log.js');
 
 	console.table = function (...args) {
@@ -13,12 +14,11 @@ module.exports = Discord => {
 		console.log('=====================================================================');
 	}
 
-	
-
 	let Helper = {
 		var: { // helpful variables
 			commands: {
 				set: ["set", "="],
+				get: ["get", "check"],
 
 				// math
 				add: ["add", "increase", "give", "+"],
@@ -46,6 +46,33 @@ module.exports = Discord => {
 			}
 		},
 		// #region functions
+		randomArray (arr) {
+			return arr[Helper.randomArrayIndex(arr)];
+		},
+		randomArrayIndex (arr) {
+			return Helper.randomInteger(arr.length-1, 0);
+		},
+		randomInteger (max=20, min=1) { // 1-20, including 1 and 20
+			return Math.floor(Math.random() * (max - min + 1)) + min;
+		},
+		hasRole (member, role) {
+			if (Helper.isNumber(Helper.Number(role))) { // because ID's are strings
+				return Helper.hasRoleByID(member, role);
+			} else if (Helper.isString(role)) { // name
+				return Helper.hasRoleByName(member, role);
+			} else if (Helper.isRole(role)) {
+				return Helper.hasRoleByID(member, role.id);
+			}
+			Log.warn("hasRole function ran with a non-known type of role. It's value was:", role);
+			return false;
+		},
+		hasRoleByID (member, roleID) {
+			return member.roles.has(roleID);
+		},
+		hasRoleByName (member, roleName) {
+			roleName = roleName.toLowerCase();
+			return Helper.isRole(member.roles.find(role => role.name.toLowerCase() === roleName));
+		},
 		parseMentions(text, client, guild) {
 			let users = Helper.match(text, Helper.var.regex.user)
 				.map(userMention => client.users.get(
@@ -141,7 +168,10 @@ module.exports = Discord => {
 			return user || null;
 		},
 		getUser(user, guild, client) {
-			return Helper.getUserByID(user.id, guild, client);
+			if (Helper.isUser(user, "discord") || Helper.isUser(user, "custom")) {
+				user = user.id;
+			}
+			return Helper.getUserByID(user, guild, client);
 		},
 		loop(iterator, func) { // just foreach, but it returns the original value
 			iterator.forEach(func);
@@ -351,7 +381,6 @@ module.exports = Discord => {
 		}
 		// #endregion functions
 	};
-
 	class Storage { // not for storing anything you couldn't store in json
 		constructor(initValue = 0) {
 			this.store = {};
@@ -376,13 +405,15 @@ module.exports = Discord => {
 			};
 		}
 
-		create(key = null, strict = true) {
+		create(key = null, strict = true, val) {
 			if (key) {
 				if (strict === true && this.store.hasOwnProperty(key)) {
 					return false;
 				}
-				this.store[key] = this.initValue;
-				return true;
+				
+				if (val === undefined) val = this.initValue;
+
+				return this.set(key, val);
 			}
 			return false;
 		}
@@ -395,14 +426,13 @@ module.exports = Discord => {
 			return false;
 		}
 
-		get(key) {
+		get(key, def) {
 			if (!this.store.hasOwnProperty(key)) {
-				this.create(key);
+				this.create(key, true, def);
 			}
 			return this.store[key];
 		}
 	}
-
 
 	class User {
 		constructor(id = null) {
@@ -480,8 +510,8 @@ module.exports = Discord => {
 			return false;
 		}
 
-		isAllowed(args) {
-			return Helper.precedence(Helper.run(Helper.precedence(this.other, {}).allowed), true);
+		isAllowed(...data) {
+			return Helper.precedence(Helper.run(Helper.precedence(this.other, {}).allowed, ...data), true);
 		}
 
 		getDescription(args, useText = true) {
@@ -549,6 +579,20 @@ module.exports = Discord => {
 				other.onValueRetrieved = (value, args) => args.reply('The value is: ' + value);
 			}
 
+			if (!Helper.isFunction(other.usage) && !Helper.isString(other.usage)) {
+				// TODO: make it a function and only shows what they can do
+				let pre = '`$prefix$commandName'
+				other.usage = pre + "` - Acquires the stored value.\n";
+				other.usage += pre + " set [value]` - Sets valuer.\n";
+				
+				if (type === 'number') {
+					other.usage += pre + " add [value]` - Adds value to the oldValue. (oldValue+value)\n";
+					other.usage += pre + " sub [value]` - Subtracts value from the oldValue. (oldValue-value)\n";
+					other.usage += pre + " multiply [value]` - Multiply the oldValue by value. (oldValue*value)\n";
+					other.usage += pre + " divideby [value]` - Divides the oldValue by value. (oldValue/value)\n";
+					other.usage += pre + " divide [value]` - Divides value by oldValue. (value/oldValue).";
+				}
+			}
 
 			other = Object.assign({ // merge the objects
 				valueName,
@@ -574,10 +618,15 @@ module.exports = Discord => {
 					storage.set(valueName, value);
 				}
 
-				if (cmd === "" || !Helper.isString(cmd) || cmd === "get" || cmd === "check") {
-					return this.other.onValueRetrieved(storage.get(valueName), args);
+				if (cmd === "" || !Helper.isString(cmd) || Helper.var.commands.get.includes(cmd)) {
+					let val;
+					if (type === "string") {
+						val = "";
+					} else if (type === "number") {
+						val = 0;
+					}
+					return this.other.onValueRetrieved(storage.get(valueName, val), args);
 				}
-
 
 				if (type === "string") {
 					if (Helper.var.commands.set.includes(cmd)) {
@@ -595,7 +644,7 @@ module.exports = Discord => {
 						return this.other.onError(Helper.var.Error.wrong, argument, args);
 					}
 
-					let storageValue = storage.get(valueName);
+					let storageValue = storage.get(valueName, 0);
 
 					if (Helper.var.commands.set.includes(cmd)) { // set
 						storageValue = argument;
@@ -606,8 +655,14 @@ module.exports = Discord => {
 					} else if (Helper.var.commands.multiply.includes(cmd)) { // multiple
 						storageValue *= argument;
 					} else if (Helper.var.commands.divideBy.includes(cmd)) { // divide by
+						if (argument === 0) { // num / 0 = Infinity
+							return this.other.onError(Helper.var.Error.divideByZero, argument, args);
+						}
 						storageValue /= argument;
 					} else if (Helper.var.commands.divide.includes(cmd)) { // divide
+						if (storageValue === 0) {
+							return this.other.onError(Helper.var.Error.divideByZero, argument, args);
+						}
 						storageValue = argument / storageValue;
 					} else {
 						return this.other.onError(Helper.var.Error.noCommand, argument, args);
@@ -649,7 +704,7 @@ module.exports = Discord => {
 				other = {};
 			}
 			if (!Helper.isFunction(other.onModifiedValue)) {
-				other.onModifiedValue = (value, users, args) => null;
+				other.onModifiedValue = (value, users, args) => args.reply("Succeeded in operation.");
 			}
 			if (!Helper.isFunction(other.onError)) {
 				other.onError = (error, value, users, args) => {
@@ -666,7 +721,20 @@ module.exports = Discord => {
 				};
 			}
 			if (!Helper.isFunction(other.onValueRetrieved)) {
-				other.onValueRetrieved = (users, args) => args.reply('Values:\n' + users.map(user => Helper.getUser(user, args.guild, args.Client).displayName + ' : ' + user.storage.get(valueName)).join('\n'));
+				other.onValueRetrieved = (users, args) => args.reply('Values:\n' + users.map(user => {
+					let val;
+					if (type === "string") {
+						val = "";
+					} else if (type === "number") {
+						val = 0;
+					}
+					return Helper.getUser(user, args.guild, args.Client).displayName + ' : ' + user.storage.get(valueName, val);
+				}).join('\n'));
+					
+			}
+
+			if (!Helper.isBoolean(other.noMentionsAffectsUser)) {
+				other.noMentionsAffectsUser = true;
 			}
 
 			// leaderboard
@@ -715,7 +783,7 @@ module.exports = Discord => {
 
 			let run = function (args) {
 				let cmd = Helper.flatten(args.content[1]).toLowerCase();
-				let argument = Helper.flatten(args.content[2]).toLowerCase();
+				let argument = Helper.flatten(args.content[2]); // shouldn't be lowercase
 
 				let mentions = Helper.parseMentions(args.message.content, args.Client.client, args.guild)
 					.map(user => args.customGuild.getUserByID(user.id));
@@ -723,14 +791,17 @@ module.exports = Discord => {
 				let type = this.other.type;
 				let valueName = this.other.valueName;
 				
+				if (mentions.length === 0 && this.other.noMentionsAffectsUser === true) {
+					mentions = [args.User];
+				}
+				
 				let cmdMentions = Helper.parseMentions(cmd, args.Client.client, args.guild);
+				
 				if (!Helper.isString(cmd) || cmd === "" || cmd === "get" || cmd === "check" || cmdMentions.length > 0) {
-					if (mentions.length === 0) {
-						mentions = [args.User];
-					}
-
 					return this.other.onValueRetrieved(mentions, args);
 				}
+
+				
 
 				// TODO make this not depend on repeated code
 				if (mentions.length === 0 && !(Helper.var.commands.leaderboard.includes(cmd) && this.other.leaderboard.allowed === true)) { // TODO: make so it complains about the argument before users
@@ -739,7 +810,7 @@ module.exports = Discord => {
 
 				if (type === "string") {
 					if (Helper.var.commands.set.includes(cmd)) {
-						if (argument === "" || !Helper.isString()) {
+						if (argument === "" || !Helper.isString(argument)) {
 							return this.other.onError(Helper.var.Error.wrong, argument, mentions, args);
 						}
 
@@ -757,24 +828,35 @@ module.exports = Discord => {
 					if (Helper.var.commands.set.includes(cmd)) {
 						mentions.forEach(user => user.storage.set(valueName, argument));
 					} else if (Helper.var.commands.add.includes(cmd)) {
-						mentions.forEach(user => user.storage.set(valueName, argument + user.storage.get(valueName)));
+						mentions.forEach(user => user.storage.set(valueName, argument + user.storage.get(valueName, 0)));
 					} else if (Helper.var.commands.sub.includes(cmd)) {
-						mentions.forEach(user => user.storage.set(valueName, user.storage.get(valueName) - argument));
+						mentions.forEach(user => user.storage.set(valueName, user.storage.get(valueName, 0) - argument));
 					} else if (Helper.var.commands.multiply.includes(cmd)) {
-						mentions.forEach(user => user.storage.set(valueName, argument * user.storage.get(valueName)));
+						mentions.forEach(user => user.storage.set(valueName, argument * user.storage.get(valueName, 0)));
 					} else if (Helper.var.commands.divideBy.includes(cmd)) {
-						mentions.forEach(user => user.storage.set(valueName, user.storage.get(valueName) / argument));
+						mentions.forEach(user => {
+							if (argument === 0) { // num / 0 = Infinity
+								return; // TODO: don't be silent
+							}
+							user.storage.set(valueName, user.storage.get(valueName, 0) / argument);
+						});
 					} else if (Helper.var.commands.divide.includes(cmd)) {
-						mentions.forEach(user => user.storage.set(valueName, argument / user.storage.get(valueName)));
+						mentions.forEach(user => {
+							let oldValue = user.storage.get(valueName, 0);
+							if (olValue === 0) { // num / 0 = Infinity
+								return; // TODO: don't be silent
+							}
+							user.storage.set(valueName, argument / oldValue);
+						});
 					} else if (Helper.var.commands.leaderboard.includes(cmd) && this.other.leaderboard.allowed === true) { // leaderboard
 						let results = Object.values(args.customGuild.Users)
-							.map(customUser => [args.guild.members.get(customUser.id) || null, customUser.storage.get(valueName)])
+							.map(customUser => [args.guild.members.get(customUser.id) || null, customUser.storage.get(valueName, 0)])
 							.filter(infoUser => Helper.isUser(infoUser[0], "discord")) // filter out null users
 							.filter(infoUser => this.other.leaderboard.displayNonMembers || Helper.isMember(infoUser[0]))
 							.slice(0, this.other.leaderboard.entries); // limit it
 													
 						results.sort((numA, numB) => numB[1] - numA[1]); // sort it greatest to least
-	
+						// TODO: modify this so the array of top 10 is sent to a function so they can decide what to do with it
 						return args.send(results 
 							.reduce((prev, cur) => `${prev}\n*${cur[0].displayName || cur[0].username}* : ${cur[1]}`,
 								'**Leaderboard:**'
@@ -928,10 +1010,10 @@ module.exports = Discord => {
 		}
 		// #endregion user
 	}
-
 	class Client {
 		constructor(token = null) {
 			this.client = new Discord.Client();
+			this.listen = new EventEmitter();
 			this.token = token;
 
 			this.Guilds = {};
@@ -946,7 +1028,7 @@ module.exports = Discord => {
 				if (Helper.isString(firstParameter) && firstParameter) {
 					let command = args.Client.findCommand(firstParameter, args.customGuild);
 
-					if (Helper.isCommand(command) && command.isAllowed(args)) {
+					if (Helper.isCommand(command) && command.isAllowed(args, true)) { // be lenient
 						args.reply(Helper.replaceKeyWords(command.getHelpText(args), args, firstParameter));
 					} else {
 						args.reply('Sorry, but that command was not found.');
@@ -983,6 +1065,7 @@ module.exports = Discord => {
 				} = message;
 
 				// messages from self will show up as "ignoring message"
+				// this is also *excessive* checking
 				if (!(
 						Helper.isMessage(message) && // makes sure this is a message
 						Helper.isChannel(channel) && // makes sure this is a channel
@@ -996,7 +1079,6 @@ module.exports = Discord => {
 					return Log.info('ignoring message');
 				}
 
-
 				let customGuild = this.getGuild(guild);
 
 				if (!Helper.isGuild(customGuild, "custom")) {
@@ -1004,19 +1086,34 @@ module.exports = Discord => {
 					return Log.warn("There was a problem with getting a custom guild from a guild. :(");
 				}
 
-				let prefix = Helper.getPrefix(this, customGuild);
-
-				if (!(
-						Helper.isString(prefix) && // make sure the prefix exists
-						content.startsWith(prefix) // make sure the text starts with the prefix, otherwise it isn't a command
-					)) {
-					return Log.info('ignoring non-command');
-				}
+				let User = customGuild.getUser(message.member); // TODO: rename this to customUser
 
 				content = Parser.parse(content, true); // parses it in to an array, useful
 
 				if (!Helper.isString(content[0])) { // make sure the first is a string
 					return Log.warn(`Possible issue with Parser, as content[0] is not a string. It's value is: '${content[0]}'`);
+				}
+
+				this.listen.emit('pre:command-message', { // TODO: make this better so it repeats less
+					content,
+					message,
+					customGuild,
+					User,
+					member,
+					content,
+					guild,
+					channel,
+					reply: message.reply.bind(message),
+					send: message.channel.send.bind(message.channel)
+				});
+
+				let prefix = Helper.getPrefix(this, customGuild);
+
+				if (!(
+						Helper.isString(prefix) && // make sure the prefix exists
+						message.content.startsWith(prefix) // make sure the text starts with the prefix, otherwise it isn't a command
+					)) {
+					return Log.info('ignoring non-command');
 				}
 
 				let commandName = content[0].substring(prefix.length).toLowerCase(); //gets the text after the prefix & make it lowercase
@@ -1025,30 +1122,21 @@ module.exports = Discord => {
 				// DEBUG information
 				console.table('content', content, 'prefix', prefix, 'commandName', commandName, 'command', command);
 
-				if (!Helper.isCommand(command)) { // should work
-					let allowedToTell = Helper.precedence(customGuild.settings.canTellNonCommand, "Sorry, but that is not a command.");
-
-					if (allowedToTell === false) return;
-
-					return message.reply(allowedToTell);
-				}
-
-				let User = customGuild.getUser(message.member);
-
-				customGuild.Commands.runCommand(command, {
-					Client: this,
+				let args = {
+					Client: this, // this client
 
 					commandName, // stores the name, especially as it's the one it was called with
+					command, // the exact command being run
 
 					message, // <Message> the message
-					get prefix() {
-						return Helper.getPrefix(this, customGuild); // so even if it updates while it's doing something it will update here
+					get prefix() { // so even if it updates while it's doing something it will update here. Is this even useful?
+						return Helper.getPrefix(this, customGuild); 
 					},
 
-					mentions: message.mentions,
+					mentions: message.mentions, // <Collection> of mentions
 					mentionsMembers: message.mentions.members.array(), // fine to keep it here since we ignore outside of textchannels
 
-					User,
+					User, // <User> Custom User Object for this user in this guild
 
 					member, // <Discord.GuildMember> the author of the message
 					memberID: member.id, // <ID> the id of the author of the message
@@ -1089,7 +1177,18 @@ module.exports = Discord => {
 					unpin: message.unpin.bind(message), // unpins the message (needs-perms)
 					react: message.react.bind(message), // reacts with an emoji (string|Emoji|ReactionEmoji) (needs-perms)
 
-				});
+				};
+
+				if (!Helper.isCommand(command) || !command.isAllowed(args)) { // should work
+					let allowedToTell = Helper.precedence(customGuild.settings.canTellNonCommand, "Sorry, but that is not a command.");
+
+					if (allowedToTell === false) return;
+
+					return message.reply(allowedToTell);
+				}
+
+
+				customGuild.Commands.runCommand(command, args);
 			});
 		}
 

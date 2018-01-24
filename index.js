@@ -43,9 +43,16 @@ module.exports = Discord => {
 				userParen: /\((user(:|=| ).*?#\d+)\)/gi,
 				roleParen: /\((role(:|=| ).*?)\)/gi,
 
+				at: /\@/g
 			}
 		},
 		// #region functions
+		send (send) { // makes a send function that replaces everything that shouldn't be repeated
+			return (text) => send(text.replace(Helper.var.regex.at, ' @ '));
+		},
+		reply (reply) {
+			return (text) => reply(text.replace(Helper.var.regex.at, ' @ '));
+		},
 		randomArray (arr) {
 			return arr[Helper.randomArrayIndex(arr)];
 		},
@@ -113,7 +120,6 @@ module.exports = Discord => {
 				.filter(user => Helper.isUser(user, "discord"))
 				.map(member => member.user || member);
 		},
-
 		capitalize(string, everyWord = false) {
 			if (everyWord === true) {
 				return string
@@ -291,8 +297,11 @@ module.exports = Discord => {
 		isString(str) {
 			return typeof (str) === 'string'; // don't use instanceof, because that doesn't work with normal strings
 		},
-		isBoolean(bool) {
-			return typeof (bool) === 'boolean'; // TODO: make this work on the strings 'true' or 'false', if a strict param is false
+		isBoolean(bool, strict=true) {
+			if (strict === false && (bool === 'true' || bool === 'false')) {
+				return true;
+			}
+			return typeof (bool) === 'boolean';
 		},
 		isObject(obj, strict = true) { // if strict, make sure it's not an Array
 			return obj instanceof Object && (strict ? !Helper.isArray(obj) : true);
@@ -398,6 +407,18 @@ module.exports = Discord => {
 			return storage;
 		}
 
+		increase (key, amount=0, def) {
+			let value = this.get(key, def);
+			if (Helper.isNumber(value)) {
+				return this.set(key, value+amount);
+			}
+			return false;
+		}
+
+		decrease (key, amount=0) {
+			return this.increase(key, -amount);
+		}
+
 		getData() {
 			return {
 				store: this.store,
@@ -467,23 +488,19 @@ module.exports = Discord => {
 			if (!Helper.isArray(name)) {
 				name = [name]; // turn it into an array, simplest this way;
 			}
-			this.name = name // TODO: do more than ignoring they aren't strings
-				.filter(commandName => Helper.isString(commandName)) // filter out those that aren't strings
-				.map(commandName => commandName.toLowerCase()); // turn all the strings to lowercase
-
-			// ran when the command is run
-			if (!Helper.isFunction(onRun)) {
-				onRun = args => true;
+			// Divides (filters) it into two arrays of [False, True]
+			this.name = Helper.divide(name, commandName => Helper.isString(commandName));
+			
+			if (this.name[0].length !== 0) {
+				Log.warn("A command being made with the names:", name, "\nHad the following non-commands (non-strings):", this.name[0]);
 			}
+			// turns them all lowercase
+			this.name = this.name[1].map(commandName => commandName.toLowerCase()); // turn all the strings to lowercase
 
-			this.onRun = onRun;
+			this.onRun = Helper.precedence(onRun, args => true);
 
-			// store other functions to be used
-			// - allowed <boolean|args{}=>boolean> whether or not to let the command run (though telling them *why* would have to be in the cmd)
-			if (!Helper.isObject(other)) {
-				other = {};
-			}
-			this.other = other || {};
+			// Stores other functions/values to be used later
+			this.other = Helper.precedence(other, {});
 		}
 
 		run(args) { // could shorten this too: return this.isAllowed(args) && this.run.call(this, args)
@@ -494,7 +511,7 @@ module.exports = Discord => {
 			return false;
 		}
 
-		matchesName(name = '', getIndex = false) { // TODO: Implement a getIndex parameter
+		matchesName(name = '', getIndex = false) {
 			if (Helper.isString(name)) {
 				name = name.toLowerCase();
 
@@ -748,7 +765,11 @@ module.exports = Discord => {
 				other.leaderboard.entries = 10; // the amount of entries to show
 			}
 			if (!Helper.isBoolean(other.leaderboard.displayNonMembers)) {
-				Helper.displayNonMembers = false; // whether or not to display users who've left
+				other.leaderboard.displayNonMembers = false; // whether or not to display users who've left
+			}
+			if (!Helper.isFunction(other.leaderboard.onLeaderboard)) {
+				other.leaderboard.onLeaderboard = (results, {send}) => send(results 
+					.reduce((prev, cur) => `${prev}\n*${cur[0].displayName || cur[0].username}* : ${cur[1]}`, '**Leaderboard:**'));
 			}
 
 			// Help/Description
@@ -757,21 +778,26 @@ module.exports = Discord => {
 			}
 
 			if (!Helper.isFunction(other.usage) && !Helper.isString(other.usage)) {
-				let pre = '`$prefix$commandName'
-				other.usage = pre + "` - Acquires the value stored.\n";
-				other.usage += pre + " [mention]+` - Gets mentioned user's values.\n";
-				other.usage += pre + " set [value] [mention]+` - Sets value of each mentioned user.\n";
+				other.usage = args => {
+					let pre = "`$prefix$commandName";
+					 // TODO: make this better
+					let text = pre + "` - Acquires the value stored.\n";
+					text += pre + " [mention]+` - Gets mentioned user's values.\n";
+					text += pre + " set [value]` - Sets the value of yourself (if that's enabled).\n"
+					text += pre + " set [value] [mention]+` - Sets value of each mentioned user.\n";
 				
-				if (type === 'number') {
-					other.usage += pre + " add [value] [mention]+` - Adds value to each mentioned user. (user+value)\n";
-					other.usage += pre + " sub [value] [mention]+` - Subtracts value from each mentioned user. (user-value)\n";
-					other.usage += pre + " multiply [value] [mention]+` - Multiply each mentioned user by value. (user*value)\n";
-					other.usage += pre + " divideby [value] [mention]+` - Divides each mentioned user by value. (user/value)\n";
-					other.usage += pre + " divide [value] [mention]+` - Divides value by each mentioned user, and sets it. (value/user).\n";
+					if (type === 'number') {
+						text += pre + " add [value] [mention]+` - Adds value to each mentioned user. (user+value)\n";
+						text += pre + " sub [value] [mention]+` - Subtracts value from each mentioned user. (user-value)\n";
+						text += pre + " multiply [value] [mention]+` - Multiply each mentioned user by value. (user*value)\n";
+						text += pre + " divideby [value] [mention]+` - Divides each mentioned user by value. (user/value)\n";
+						text += pre + " divide [value] [mention]+` - Divides value by each mentioned user, and sets it. (value/user).\n";
 					
-					if (other.leaderboard.allowed) {
-						other.usage += pre + " leaderboard` - Generates a top " + other.leaderboard.entries + " leaderboard.";
+						if (Helper.run(other.leaderboard.allowed, args)) {
+							text += pre + " leaderboard` - Generates a top " + other.leaderboard.entries + " leaderboard.";
+						}
 					}
+					return text;
 				}
 			}
 
@@ -792,7 +818,7 @@ module.exports = Discord => {
 				let valueName = this.other.valueName;
 				
 				if (mentions.length === 0 && this.other.noMentionsAffectsUser === true) {
-					mentions = [args.User];
+					mentions = [args.customUser];
 				}
 				
 				let cmdMentions = Helper.parseMentions(cmd, args.Client.client, args.guild);
@@ -801,10 +827,7 @@ module.exports = Discord => {
 					return this.other.onValueRetrieved(mentions, args);
 				}
 
-				
-
-				// TODO make this not depend on repeated code
-				if (mentions.length === 0 && !(Helper.var.commands.leaderboard.includes(cmd) && this.other.leaderboard.allowed === true)) { // TODO: make so it complains about the argument before users
+				if (mentions.length === 0 && !(Helper.var.commands.leaderboard.includes(cmd) && Helper.run(this.other.leaderboard.allowed, args) === true)) { // TODO: make so it complains about the argument before users
 					return this.other.onError(Helper.var.Error.noUsers, argument, mentions, args);
 				}
 
@@ -820,8 +843,7 @@ module.exports = Discord => {
 					}
 				} else if (type === "number") {
 					argument = Helper.Number(argument);
-					// TODO make this not depend on repeated code
-					if (!Helper.isNumber(argument, true) && !(Helper.var.commands.leaderboard.includes(cmd) && this.other.leaderboard.allowed === true)) {
+					if (!Helper.isNumber(argument, true) && !(Helper.var.commands.leaderboard.includes(cmd) && Helper.run(this.other.leaderboard.allowed, args) === true)) {
 						return this.other.onError(Helper.var.Error.wrong, argument, mentions, args);
 					}
 
@@ -848,7 +870,7 @@ module.exports = Discord => {
 							}
 							user.storage.set(valueName, argument / oldValue);
 						});
-					} else if (Helper.var.commands.leaderboard.includes(cmd) && this.other.leaderboard.allowed === true) { // leaderboard
+					} else if (Helper.var.commands.leaderboard.includes(cmd) && Helper.run(this.other.leaderboard.allowed, args) === true) { // leaderboard
 						let results = Object.values(args.customGuild.Users)
 							.map(customUser => [args.guild.members.get(customUser.id) || null, customUser.storage.get(valueName, 0)])
 							.filter(infoUser => Helper.isUser(infoUser[0], "discord")) // filter out null users
@@ -856,11 +878,7 @@ module.exports = Discord => {
 							.slice(0, this.other.leaderboard.entries); // limit it
 													
 						results.sort((numA, numB) => numB[1] - numA[1]); // sort it greatest to least
-						// TODO: modify this so the array of top 10 is sent to a function so they can decide what to do with it
-						return args.send(results 
-							.reduce((prev, cur) => `${prev}\n*${cur[0].displayName || cur[0].username}* : ${cur[1]}`,
-								'**Leaderboard:**'
-							));
+						return this.other.leaderboard.onLeaderboard(results, args);
 					} else {
 						return this.other.onError(Helper.var.Error.noCommand, argument, mentions, args);
 					}
@@ -1086,7 +1104,7 @@ module.exports = Discord => {
 					return Log.warn("There was a problem with getting a custom guild from a guild. :(");
 				}
 
-				let User = customGuild.getUser(message.member); // TODO: rename this to customUser
+				let customUser = customGuild.getUser(message.member);
 
 				content = Parser.parse(content, true); // parses it in to an array, useful
 
@@ -1098,7 +1116,7 @@ module.exports = Discord => {
 					content,
 					message,
 					customGuild,
-					User,
+					customUser,
 					member,
 					content,
 					guild,
@@ -1136,7 +1154,7 @@ module.exports = Discord => {
 					mentions: message.mentions, // <Collection> of mentions
 					mentionsMembers: message.mentions.members.array(), // fine to keep it here since we ignore outside of textchannels
 
-					User, // <User> Custom User Object for this user in this guild
+					customUser, // <User> Custom User Object for this user in this guild
 
 					member, // <Discord.GuildMember> the author of the message
 					memberID: member.id, // <ID> the id of the author of the message
@@ -1166,8 +1184,8 @@ module.exports = Discord => {
 					isAvailable() {
 						return guild.available;
 					},
-					reply: message.reply.bind(message), // replies with an @ to the member at the start (needs-perms)
-					send: message.channel.send.bind(message.channel), // sends a message to the same channel (needs-perms)
+					reply: Helper.reply(message.reply.bind(message)), // replies with an @ to the member at the start (needs-perms)
+					send: Helper.send(message.channel.send.bind(message.channel)), // sends a message to the same channel (needs-perms)
 					clearReactions: message.clearReactions.bind(message), // clears all the reactions (needs-perms)
 					createReactionCollector: message.createReactionCollector.bind(message), // collects any reactions that are added
 					delete: message.delete.bind(message), // deletes the message (needs-perms)

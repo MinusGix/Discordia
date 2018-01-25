@@ -591,7 +591,7 @@ module.exports = Discord => {
 				other = {};
 			}
 			if (!Helper.isFunction(other.onModifiedValue)) {
-				other.onModifiedValue = (value, args) => args.reply("Value was set too: " + value);
+				other.onModifiedValue = (value, oldValue, args) => args.reply("Value was set too: " + value);
 			}
 			if (!Helper.isFunction(other.onError)) {
 				other.onError = (error, value, args) => {
@@ -678,6 +678,7 @@ module.exports = Discord => {
 					}
 
 					let storageValue = storage.get(valueName, 0);
+					let oldVal = storageValue;
 
 					if (Helper.var.commands.set.includes(cmd)) { // set
 						storageValue = argument;
@@ -702,7 +703,7 @@ module.exports = Discord => {
 					}
 
 					storage.set(valueName, storageValue);
-					return this.other.onModifiedValue(storageValue, args);
+					return this.other.onModifiedValue(storageValue, oldVal, args);
 				} else {
 					// this is more of an internal problem TODO: make this better
 					return this.other.onError(Helper.var.Error.noCommand, argument, args);

@@ -1057,7 +1057,7 @@ module.exports = Discord => {
 			this.defaultPrefix = "k!";
 
 			// all of them should have a help command
-			this.Commands.addCommand(["help", "h", "commands", "cmds"], args => {
+			this.Commands.addCommand(["help", "h", "commands", "cmds"], async args => {
 				let firstParameter = Helper.flatten(args.content[1]);
 				if (Helper.isString(firstParameter) && firstParameter) {
 					let command = args.Client.findCommand(firstParameter, args.customGuild);
@@ -1069,22 +1069,45 @@ module.exports = Discord => {
 					}
 				} else {
 					let prefix = args.prefix;
+
 					let commands = Helper.divide(
 						args.Client.Commands.list.concat(args.customGuild.Commands.list),
-						(command) => Helper.isCommand(command))
+						command => Helper.isCommand(command)
+					);
 
 					if (commands[0].length > 0) { // if there's non-commands
 						Log.warn(`There was ${commands[0].length} items inside the command list for the Client and/or the guild with the id: '${args.customGuild.id}'\nthat are not valid commands.`);
 					}
 
-					args.reply('**Commands**:\n' + commands[1]
-						.filter(command => command.isAllowed(args))
-						.map(command => prefix + command.name[0])
-						.join(', ') + '.');
+					commands = commands[1].filter(command => command.isAllowed(args))
+						.reduce((prev, cur) => {
+							let group = Helper.precedence(cur.other.group, "Other");
+							if (!prev.hasOwnProperty(group)) {
+								prev[group] = [];
+							}
+							prev[group].push(cur);
+							return prev;
+						}, {});
+					
+					await args.send('**Commands**:\n' + Helper.precedence(this.helpPreface, "") + '\n');
+					for (let group in commands) {
+						let text = "";
+						text += "**" + group + "**\n";
+						if (Helper.isArray(commands[group])) {
+							for (let i = 0; i < commands[group].length; i++) {
+								text += `\`${Helper.replaceKeyWords(Helper.precedence(Helper.run(commands[group][i].other.helpCommand, args), prefix + commands[group][i].name[0]), args, commands[group][i].name[0])}\` - ${Helper.precedence(Helper.run(commands[group][i].other.description, args), "No Description Found")}\n`;
+							}
+						}
+						args.send(text + "\n"); // they can be sent in whatever order
+					}
+
+					
+
+					
 				}
 			}, {
 				allowed: true,
-				description: "Gets the list of commands, or acquires the description of a command.",
+				description: "Gets the list of commands.\n\tPut a command name after to get it's usage text.",
 				usage: "`$prefix$commandname` acquires the list of commands\n`$prefix$commandname [command]` gets the help information for [command]`"
 			});
 

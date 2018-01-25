@@ -19,9 +19,13 @@ function parse(text = '', shouldFlatten = true) {
 
 	let char = _ => {
 		let parentType = getNested(result, currentNest).type;
-		if ((current() === '"' || current() === "'" || current() === '(') && parentType !== 'quote') {
+		if ((current() === '"' || current() === "'" || current() === '(' || current() === "“") && parentType !== 'quote') {
 			let quoteMatch = current();
 			
+			if (quoteMatch === "“") {
+				quoteMatch = "”";
+			}
+
 			if (quoteMatch === '(') {
 				quoteMatch = ')';
 			} else {

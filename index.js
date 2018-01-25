@@ -68,6 +68,13 @@ module.exports = Discord => {
 			return Math.floor(Math.random() * (max - min + 1)) + min;
 		},
 		hasRole(member, role) {
+			if (Helper.isArray(role)) {
+				let values = false;
+				for (let i = 0; i < role.length; i++) {
+					values = values || Helper.hasRole(member, role[i]);
+				}
+				return values;
+			}
 			if (Helper.isNumber(Helper.Number(role))) { // because ID's are strings
 				return Helper.hasRoleByID(member, role);
 			} else if (Helper.isString(role)) { // name
@@ -833,7 +840,6 @@ module.exports = Discord => {
 				}
 
 				let cmdMentions = Helper.parseMentions(cmd, args.Client.client, args.guild);
-
 				if (!Helper.isString(cmd) || cmd === "" || cmd === "get" || cmd === "check" || cmdMentions.length > 0) {
 					return this.other.onValueRetrieved(mentions, args);
 				}
@@ -886,10 +892,9 @@ module.exports = Discord => {
 							.map(customUser => [args.guild.members.get(customUser.id) || null, customUser.storage.get(valueName, 0)])
 							.filter(infoUser => Helper.isUser(infoUser[0], "discord")) // filter out null users
 							.filter(infoUser => this.other.leaderboard.displayNonMembers || Helper.isMember(infoUser[0]))
-							.slice(0, this.other.leaderboard.entries); // limit it
 
 						results.sort((numA, numB) => numB[1] - numA[1]); // sort it greatest to least
-						return this.other.leaderboard.onLeaderboard(results, args);
+						return this.other.leaderboard.onLeaderboard(results.slice(0, this.other.leaderboard.entries), args);
 					} else {
 						return this.other.onError(Helper.var.Error.noCommand, argument, mentions, args);
 					}
